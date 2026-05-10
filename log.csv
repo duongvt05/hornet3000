@@ -1,0 +1,16 @@
+Timestamp,Class,Confidence,Camera,Image_Path
+2026-05-04 13:36:37,vcra,0.83,cam1,detections\alert_cam1_20260504_133637_280446.jpg
+2026-05-04 13:36:40,vcra,0.86,cam1,detections\alert_cam1_20260504_133640_228710.jpg
+2026-05-04 13:36:40,vcra,0.81,cam1,detections\alert_cam1_20260504_133640_820568.jpg
+2026-05-04 13:36:42,vcra,0.83,cam1,detections\alert_cam1_20260504_133642_682593.jpg
+2026-05-04 13:36:44,vcra,0.8,cam1,detections\alert_cam1_20260504_133644_634320.jpg
+2026-05-04 13:49:38,vcra,0.83,cam1,detections\alert_cam1_20260504_134938_666485.jpg
+2026-05-04 13:49:45,vcra,0.86,cam1,detections\alert_cam1_20260504_134945_978338.jpg
+2026-05-04 13:49:46,vcra,0.81,cam1,detections\alert_cam1_20260504_134946_967562.jpg
+2026-05-04 13:49:49,vcra,0.83,cam1,detections\alert_cam1_20260504_134949_718301.jpg
+2026-05-04 13:49:52,vcra,0.8,cam1,detections\alert_cam1_20260504_134952_978530.jpg
+2026-05-04 13:50:41,vcra,0.83,cam1,detections\alert_cam1_20260504_135041_069605.jpg
+2026-05-04 13:50:44,vcra,0.86,cam1,detections\alert_cam1_20260504_135044_488925.jpg
+2026-05-04 13:50:46,vcra,0.81,cam1,detections\alert_cam1_20260504_135046_275763.jpg
+2026-05-04 13:50:50,vcra,0.83,cam1,detections\alert_cam1_20260504_135050_569657.jpg
+2026-05-04 13:50:53,vcra,0.8,cam1,detections\alert_cam1_20260504_135053_767567.jpg

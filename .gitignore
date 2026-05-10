@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# YOLO / detections
+detections/
+
+# Node
+node_modules/
+dist/
+
+# Videos
+*.mp4
+
+# Env
+.env
+
+# VSCode
+.vscode/
+
+# Logs
+*.log
