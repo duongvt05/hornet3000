@@ -1,23 +1,20 @@
-# Python
-__pycache__/
-*.pyc
-.pytest_cache/
+# Videos
+*.mp4
+*.avi
 
-# YOLO / detections
-detections/
+# YOLO Models
+*.pt
+*.pth
 
 # Node
 node_modules/
-dist/
 
-# Videos
-*.mp4
+# Detection outputs
+detections/
 
-# Env
-.env
-
-# VSCode
-.vscode/
+# Python cache
+__pycache__/
+.pytest_cache/
 
 # Logs
 *.log
