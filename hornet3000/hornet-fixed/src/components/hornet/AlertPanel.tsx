@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 
 interface AlertItem {
   id: number;
@@ -10,10 +11,10 @@ interface AlertItem {
   confidence?: number;
 }
 
-// Mock fallback khi API chưa chạy
 const mockAlerts: AlertItem[] = [
-  { id: 1, type: "hornet", severity: "high", message: "⚠ Hornet detected - vcra (98%)", camera: "CAM1", time: "14:32", confidence: 98 },
+  { id: 1, type: "hornet", severity: "high", message: "⚠ Asian Hornet Detected (98%)", camera: "CAM1", time: "14:32", confidence: 98 },
   { id: 2, type: "bee", severity: "low", message: "Bee activity detected", camera: "CAM1", time: "14:15", confidence: 82 },
+  { id: 3, type: "system", severity: "medium", message: "Camera 4 connection unstable", camera: "CAM4", time: "13:50" },
 ];
 
 export default function AlertPanel() {
@@ -34,7 +35,7 @@ export default function AlertPanel() {
           }
         }
       } catch {
-        // Giữ mock data
+        // Keep mock data
       }
     };
 
@@ -70,7 +71,7 @@ export default function AlertPanel() {
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Recent Alerts</h3>
         <div className="flex items-center gap-2">
           {usingMock && (
-            <span className="text-xs text-amber-500 dark:text-amber-400">demo</span>
+            <span className="text-xs text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full">demo</span>
           )}
           <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-xs font-medium">
             <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
@@ -107,9 +108,10 @@ export default function AlertPanel() {
       </div>
 
       <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-        <a href="/alerts-center" className="text-sm text-brand-500 hover:text-brand-600 font-medium">
-          Xem tất cả alerts →
-        </a>
+        {/* FIX: dùng Link thay vì <a href> để tránh reload trang */}
+        <Link to="/alerts-center" className="text-sm text-brand-500 hover:text-brand-600 font-medium">
+          View all alerts →
+        </Link>
       </div>
     </div>
   );

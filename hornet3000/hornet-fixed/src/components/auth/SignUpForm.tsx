@@ -14,13 +14,13 @@ export default function SignUpForm() {
     e.preventDefault(); 
     
     // Giả lập chuyển hướng
-    navigate("/"); 
+    navigate("/signin"); 
   };
 
   // 4. Hàm xử lý khi bấm các nút Mạng xã hội
   const handleSocialLogin = () => {
     // Giả lập chuyển hướng
-    navigate("/");
+    navigate("/signin");
   };
 
   return (

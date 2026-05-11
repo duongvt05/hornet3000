@@ -45,7 +45,6 @@ export default function AlertsCenter() {
     low: { badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400", border: "border-l-blue-400", bg: "" },
   };
 
-  const newCount = alerts.filter(a => a.status === "new").length;
   const criticalCount = alerts.filter(a => a.severity === "critical" && a.status === "new").length;
 
   return (

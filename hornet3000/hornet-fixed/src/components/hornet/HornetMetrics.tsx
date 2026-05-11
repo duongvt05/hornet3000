@@ -30,7 +30,7 @@ function MetricCard({ title, value, icon, color, bgColor, subText, trend, trendV
           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
             trend === "up" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
             trend === "down" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-            "bg-gray-100 text-gray-600"
+            "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
           }`}>
             {trend === "up" ? "↑" : trend === "down" ? "↓" : "—"} {trendValue}
           </span>
@@ -63,7 +63,7 @@ export default function HornetMetrics() {
           setStats(data);
         }
       } catch {
-        // API chưa chạy, giữ null để hiển thị placeholder
+        // API not running — keep null to show placeholder
       } finally {
         setLoading(false);
       }
@@ -79,25 +79,25 @@ export default function HornetMetrics() {
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 md:gap-6">
       <MetricCard
-        title="Hornet Detected"
+        title="Hornets Detected"
         value={stats?.hornetDetections ?? 0}
         icon="🐝"
         color={isHornetDanger ? "text-red-600 dark:text-red-400" : "text-gray-800 dark:text-white"}
         bgColor={isHornetDanger ? "bg-red-50 dark:bg-red-900/20" : "bg-gray-50 dark:bg-gray-800"}
-        subText="Hôm nay"
+        subText="Today"
         trend={isHornetDanger ? "down" : "neutral"}
-        trendValue={isHornetDanger ? "Cảnh báo!" : "Bình thường"}
+        trendValue={isHornetDanger ? "Alert!" : "Normal"}
         loading={loading}
       />
       <MetricCard
-        title="Bee Detected"
+        title="Bees Detected"
         value={stats?.beeDetections ?? 0}
         icon="🍯"
         color="text-amber-600 dark:text-amber-400"
         bgColor="bg-amber-50 dark:bg-amber-900/20"
-        subText="Hôm nay"
+        subText="Today"
         trend="neutral"
-        trendValue="Hoạt động"
+        trendValue="Active"
         loading={loading}
       />
       <MetricCard
@@ -106,9 +106,9 @@ export default function HornetMetrics() {
         icon="🎯"
         color="text-green-600 dark:text-green-400"
         bgColor="bg-green-50 dark:bg-green-900/20"
-        subText="Trung bình"
+        subText="Average"
         trend="up"
-        trendValue="Tốt"
+        trendValue="Good"
         loading={loading}
       />
       <MetricCard
@@ -119,7 +119,7 @@ export default function HornetMetrics() {
         bgColor="bg-blue-50 dark:bg-blue-900/20"
         subText="Online"
         trend={stats && stats.camerasOnline === stats.totalCameras ? "neutral" : "down"}
-        trendValue={stats && stats.camerasOnline === stats.totalCameras ? "OK" : "1 Offline"}
+        trendValue={stats && stats.camerasOnline === stats.totalCameras ? "All OK" : "Offline"}
         loading={loading}
       />
     </div>

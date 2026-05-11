@@ -534,10 +534,9 @@ export default function MonitoringPage() {
 
   return (
     <div style={{
-      minHeight: "100vh", background: "#0a0f14",
       color: "#e5e7eb",
       fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
-      padding: "18px 20px",
+      padding: "4px 0",
     }}>
       <style>{`
         @keyframes spin        { to { transform: rotate(360deg); } }
@@ -554,15 +553,14 @@ export default function MonitoringPage() {
       {/* Header */}
       <div style={{
         display: "flex", alignItems: "center",
-        justifyContent: "space-between", marginBottom: 18,
+        justifyContent: "space-between", marginBottom: 18, padding: "0 0",
       }}>
         <div>
-          <h1 style={{
-            margin: 0, fontSize: 19, fontWeight: 700,
-            color: "#f0fdf4", letterSpacing: -.3,
-          }}>🍯 Giám sát trang trại ong</h1>
-          <p style={{ margin: "3px 0 0", fontSize: 11, color: "#4b5563" }}>
-            HornetGuard Pro · 3 Camera · YOLO AI Detection
+          <h1 className="text-gray-800 dark:text-white" style={{
+            margin: 0, fontSize: 19, fontWeight: 700, letterSpacing: -.3,
+          }}>🍯 Bee Farm Monitoring</h1>
+          <p style={{ margin: "3px 0 0", fontSize: 11, color: "#6b7280" }}>
+            HornetGuard Pro · 3 Cameras · YOLO AI Detection
           </p>
         </div>
         <div style={{

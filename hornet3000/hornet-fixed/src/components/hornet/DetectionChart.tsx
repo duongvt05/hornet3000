@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -6,7 +6,7 @@ const mockHornet = [12, 19, 8, 25, 31, 14, 19];
 const mockBee = [45, 62, 38, 71, 55, 80, 66];
 
 export default function DetectionChart() {
-  const [data, setData] = useState({ hornet: mockHornet, bee: mockBee });
+  const [data] = useState({ hornet: mockHornet, bee: mockBee });
   const [activeTab, setActiveTab] = useState<"week" | "month">("week");
 
   const maxVal = Math.max(...data.hornet, ...data.bee);
