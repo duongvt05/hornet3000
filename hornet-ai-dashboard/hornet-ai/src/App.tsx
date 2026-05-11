@@ -7,6 +7,7 @@ import Analytics from "./pages/Analytics/index";
 import AlertsCenter from "./pages/AlertsCenter/index";
 import Settings from "./pages/Settings/index";
 import SignIn from "./pages/AuthPages/SignIn";
+import SignUp from "./pages/AuthPages/SignUp"; // 1. THÊM DÒNG IMPORT NÀY
 import NotFound from "./pages/OtherPage/NotFound";
 
 export default function App() {
@@ -22,7 +23,11 @@ export default function App() {
             <Route path="/alerts-center" element={<AlertsCenter />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
+          
+          {/* CÁC ROUTE KHÔNG NẰM TRONG LAYOUT CHÍNH (FULL MÀN HÌNH) */}
           <Route path="/signin" element={<SignIn />} />
+          <Route path="/signup" element={<SignUp />} /> {/* 2. THÊM DÒNG ROUTE NÀY */}
+          
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
