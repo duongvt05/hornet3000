@@ -57,10 +57,10 @@ HORNET_CLASSES = {"vcra", "vespsp"}
 # Danh sách camera: thêm/bớt tuỳ ý
 # source: đường dẫn video file hoặc số (0 = webcam)
 CAMERAS = [
-    {"id": "cam1", "source": r"test_hornet_result.mp4"},
+    #{"id": "cam1", "source": r"test_hornet_result.mp4"},
     # Bỏ comment 2 dòng dưới khi có video cam2/cam3
-    # {"id": "cam2", "source": r"cam2_hive.mp4"},
-    # {"id": "cam3", "source": r"cam3_field.mp4"},
+    #{"id": "cam2", "source": r"cam2_hive.mp4"},
+    {"id": "cam3", "source": r"cam3_field.mp4"},
 ]
 
 os.makedirs(SAVE_DIR, exist_ok=True)
