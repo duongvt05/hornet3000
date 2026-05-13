@@ -1,15 +1,14 @@
 """
-HornetGuard Pro — API Server (FIXED)
-=====================================
-Các fix:
-  1. /latest_frame/<cam_id> trả JPEG tĩnh thay vì MJPEG
-     → React <img src="…?t=ts"> reload được bình thường
-  2. _cam_latest() tìm cả detections/ VÀ detected_frames/
-  3. run_detection ghi vào SAVE_DIR (detections/) nhất quán
-  4. _log_detection lưu Image_Path tương đối (tên file, không phải path tuyệt đối)
-  5. _find_image tìm đúng cả 2 thư mục
-  6. Cache-Control: no-cache trên mọi ảnh để browser luôn lấy frame mới
-  7. CORS mở cho tất cả route
+HornetGuard Pro — API Server (FINAL)
+======================================
+Fix so với phiên bản cũ:
+  1. Thêm /api/detections alias → RecentDetections.tsx cũ vẫn hoạt động
+  2. /api/stats trả đủ camerasOnline, totalCameras cho HornetMetrics
+  3. /api/alerts trả {alerts:[...], total:N} — không phải array thô
+  4. /api/history trả {history:[...], total:N}
+  5. /latest_frame/<cam_id> trả JPEG tĩnh + Cache-Control: no-cache
+  6. CORS mở toàn bộ
+  7. _read_log() đọc được cả CSV format cũ lẫn mới
 """
 
 import os, time, csv, threading
@@ -24,8 +23,8 @@ CORS(app)
 
 # ─── PATHS ────────────────────────────────────────────────────────────────────
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
-SAVE_DIR     = os.path.join(BASE_DIR, "detections")       # ảnh capture + latest frame
-SAVE_DIR_ALT = os.path.join(BASE_DIR, "detected_frames")  # fallback cũ
+SAVE_DIR     = os.path.join(BASE_DIR, "detections")
+SAVE_DIR_ALT = os.path.join(BASE_DIR, "detected_frames")
 LOG_FILE     = os.path.join(BASE_DIR, "log.csv")
 MODEL_PATH   = os.path.join(BASE_DIR, "yolov8sModel", "weights", "best.pt")
 
@@ -46,7 +45,7 @@ iot_state = {
 CAMERAS = {
     "cam1": {
         "name": "Cong vao to", "name_en": "Entrance Monitor",
-        "source": os.path.join(BASE_DIR, "cam1_entrance.mp4"),
+        "source": os.path.join(BASE_DIR, "test_hornet_result.mp4"),
         "description": "Giam sat loi vao chinh",
         "position": "Cong", "icon": "door",
     },
@@ -75,26 +74,21 @@ def _get_model():
         try:
             from ultralytics import YOLO
             _model = YOLO(MODEL_PATH)
-            print(f"[YOLO] Loaded. Classes: {_model.names}")
+            print(f"[YOLO] Loaded: {_model.names}")
         except Exception as e:
             print(f"[YOLO] Error: {e}")
     return _model
 
 
 def _cam_latest(cam_id: str) -> str:
-    """
-    Trả đường dẫn đến frame mới nhất của cam_id.
-    Tìm detections/ trước, rồi detected_frames/.
-    """
     for d in [SAVE_DIR, SAVE_DIR_ALT]:
         p = os.path.join(d, f"{cam_id}_latest.jpg")
         if os.path.exists(p):
             return p
-    return os.path.join(SAVE_DIR, f"{cam_id}_latest.jpg")  # default (chưa tồn tại)
+    return os.path.join(SAVE_DIR, f"{cam_id}_latest.jpg")
 
 
 def _find_image(img_name: str):
-    """Tìm ảnh capture theo tên file. Trả None nếu không thấy."""
     if not img_name:
         return None
     if os.path.isabs(img_name) and os.path.exists(img_name):
@@ -112,8 +106,8 @@ def _make_placeholder(cam_id: str) -> bytes:
     img[:] = (22, 27, 34)
     cv2.putText(img, cam_id.upper(), (260, 170),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (60, 140, 60), 2)
-    cv2.putText(img, "No stream", (250, 205),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (80, 80, 80), 1)
+    cv2.putText(img, "No stream - run main_controller.py", (80, 205),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (80, 80, 80), 1)
     _, buf = cv2.imencode(".jpg", img)
     return buf.tobytes()
 
@@ -126,12 +120,30 @@ def _no_cache(response):
 
 
 def _read_log():
+    """
+    Đọc log.csv — xử lý được cả 2 format:
+      OLD: Timestamp, Class, Confidence, Camera, Image_Path  (main_controller cũ)
+      NEW: Timestamp, Camera, Class, Confidence, Image_Path  (api_server mới)
+    """
     if not os.path.exists(LOG_FILE):
         return []
     try:
+        rows = []
         with open(LOG_FILE, newline="", encoding="utf-8") as f:
-            return list(csv.DictReader(f))
-    except Exception:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # Normalize keys: bất kể thứ tự cột
+                normalized = {
+                    "Timestamp":  row.get("Timestamp") or row.get("timestamp") or "",
+                    "Camera":     row.get("Camera")    or row.get("camera")    or "cam1",
+                    "Class":      row.get("Class")     or row.get("class")     or "unknown",
+                    "Confidence": row.get("Confidence")or row.get("confidence")or "0",
+                    "Image_Path": row.get("Image_Path")or row.get("image_path")or "",
+                }
+                rows.append(normalized)
+        return rows
+    except Exception as e:
+        print(f"[LOG] Read error: {e}")
         return []
 
 
@@ -144,16 +156,14 @@ def _within_days(row, days):
     except Exception:
         return False
 
-# ─── DETECTION LOGIC ──────────────────────────────────────────────────────────
+# ─── DETECTION THREAD ─────────────────────────────────────────────────────────
 
-def _log_detection(cam_id: str, label: str, conf: float, frame):
+def _log_detection(cam_id, label, conf, frame):
     ts       = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     img_name = f"{cam_id}_{ts}.jpg"
-    img_path = os.path.join(SAVE_DIR, img_name)   # ← SAVE_DIR nhất quán
-    cv2.imwrite(img_path, frame)
-
-    fieldnames  = ["Timestamp", "Camera", "Class", "Confidence", "Image_Path"]
-    write_hdr   = not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0
+    cv2.imwrite(os.path.join(SAVE_DIR, img_name), frame)
+    fieldnames = ["Timestamp", "Camera", "Class", "Confidence", "Image_Path"]
+    write_hdr  = not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0
     with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         if write_hdr:
@@ -163,11 +173,11 @@ def _log_detection(cam_id: str, label: str, conf: float, frame):
             "Camera":     cam_id,
             "Class":      label,
             "Confidence": round(conf, 4),
-            "Image_Path": img_name,   # ← tên file tương đối
+            "Image_Path": img_name,
         })
 
 
-def _trigger_iot(conf: float):
+def _trigger_iot(conf):
     if conf < 0.55:
         return
     ts = datetime.now().isoformat()
@@ -177,31 +187,25 @@ def _trigger_iot(conf: float):
             iot_state[dev]["last_changed"] = ts
 
 
-def run_detection(cam_id: str):
-    """Thread: đọc video, chạy YOLO, ghi frame vào detections/<cam_id>_latest.jpg."""
+def run_detection(cam_id):
     source = CAMERAS[cam_id]["source"]
-    output = os.path.join(SAVE_DIR, f"{cam_id}_latest.jpg")  # ← FIX: SAVE_DIR
-
+    output = os.path.join(SAVE_DIR, f"{cam_id}_latest.jpg")
     if not os.path.exists(source):
         print(f"[{cam_id}] Video not found: {source}")
         detection_running[cam_id] = False
         return
-
     detection_running[cam_id] = True
-    cap   = cv2.VideoCapture(source)
-    fc    = 0
+    cap = cv2.VideoCapture(source)
+    fc  = 0
     model = _get_model()
-
     while detection_running[cam_id]:
         ret, frame = cap.read()
         if not ret:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
-
-        frame = cv2.resize(frame, (640, 360))
-        fc += 1
+        frame  = cv2.resize(frame, (640, 360))
+        fc    += 1
         ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         if model and fc % 2 == 0:
             results   = model(frame, conf=0.4, verbose=False)[0]
             annotated = results.plot()
@@ -212,22 +216,17 @@ def run_detection(cam_id: str):
                 if label.lower() in HORNET_CLASSES:
                     _log_detection(cam_id, label, conf, annotated.copy())
                     _trigger_iot(conf)
-            cv2.putText(annotated, ts_str, (8, 22),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(annotated, ts_str, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
             cv2.imwrite(output, annotated)
         else:
-            cv2.putText(frame, ts_str, (8, 22),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(frame, ts_str, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
             cv2.imwrite(output, frame)
-
         time.sleep(0.033)
-
     cap.release()
     detection_running[cam_id] = False
 
 # ─── ROUTES ───────────────────────────────────────────────────────────────────
 
-# ── VIDEO FRAME (JPEG tĩnh, React reload bằng ?t=timestamp) ──────────────────
 @app.route("/latest_frame")
 @app.route("/latest_frame/<cam_id>")
 def latest_frame(cam_id="cam1"):
@@ -236,11 +235,9 @@ def latest_frame(cam_id="cam1"):
     latest = _cam_latest(cam_id)
     if os.path.exists(latest):
         return _no_cache(send_file(latest, mimetype="image/jpeg"))
-    # Placeholder khi chưa có frame
     return _no_cache(Response(_make_placeholder(cam_id), mimetype="image/jpeg"))
 
 
-# ── CAMERAS ──────────────────────────────────────────────────────────────────
 @app.route("/api/cameras")
 def api_cameras():
     result = {}
@@ -260,7 +257,6 @@ def api_cameras():
     return jsonify(result)
 
 
-# ── STATS ─────────────────────────────────────────────────────────────────────
 @app.route("/api/stats")
 def api_stats():
     rows        = _read_log()
@@ -268,26 +264,53 @@ def api_stats():
     hornet_rows = [r for r in rows if r.get("Class", "").lower() in HORNET_CLASSES]
     today_rows  = [r for r in hornet_rows if r.get("Timestamp", "").startswith(now.strftime("%Y-%m-%d"))]
     week_rows   = [r for r in hornet_rows if _within_days(r, 7)]
-    confs       = [float(r["Confidence"]) for r in rows if r.get("Confidence")]
+    confs       = []
+    for r in rows:
+        try:
+            confs.append(float(r["Confidence"]))
+        except Exception:
+            pass
+    cam_statuses = {
+        cid: {
+            "online":           os.path.exists(_cam_latest(cid)),
+            "name":             CAMERAS[cid]["name"],
+            "detectionRunning": detection_running.get(cid, False),
+        }
+        for cid in CAMERAS
+    }
+    cameras_online = sum(1 for v in cam_statuses.values() if v["online"])
     return jsonify({
         "hornetDetections": len(hornet_rows),
-        "beeDetections":    len([r for r in rows if "bee" in r.get("Class", "").lower()]),
+        "beeDetections":    len([r for r in rows if "bee" in r.get("Class","").lower()]),
         "todayAlerts":      len(today_rows),
         "weeklyAlerts":     len(week_rows),
-        "aiAccuracy":       round(sum(confs) / len(confs) * 100, 1) if confs else 94.2,
+        "aiAccuracy":       round(sum(confs) / len(confs) * 100, 1) if confs else 0,
         "totalDetections":  len(rows),
-        "cameraStatus": {
-            cid: {
-                "online":           os.path.exists(_cam_latest(cid)),
-                "name":             CAMERAS[cid]["name"],
-                "detectionRunning": detection_running.get(cid, False),
-            }
-            for cid in CAMERAS
-        },
+        "camerasOnline":    cameras_online,     # ← HornetMetrics cần field này
+        "totalCameras":     len(CAMERAS),       # ← HornetMetrics cần field này
+        "cameraStatus":     cam_statuses,
     })
 
 
-# ── ALERTS ────────────────────────────────────────────────────────────────────
+def _build_alert(r, cam_id):
+    conf = 0.0
+    try:
+        conf = float(r.get("Confidence", 0))
+    except Exception:
+        pass
+    conf_pct = round(conf * 100, 1) if conf <= 1 else round(conf, 1)
+    return {
+        "id":         f"{cam_id}_{r.get('Timestamp','')}",
+        "timestamp":  r.get("Timestamp", ""),
+        "camera":     cam_id,
+        "cameraName": CAMERAS.get(cam_id, {}).get("name", cam_id),
+        "species":    r.get("Class", "unknown"),
+        "confidence": conf_pct,
+        "severity":   "high" if conf_pct >= 75 else "medium" if conf_pct >= 50 else "low",
+        "imagePath":  r.get("Image_Path", ""),
+    }
+
+
 @app.route("/api/alerts")
 def api_alerts():
     rows  = _read_log()
@@ -297,60 +320,70 @@ def api_alerts():
     for r in reversed(rows):
         if cam and r.get("Camera") != cam:
             continue
-        cls = r.get("Class", "unknown")
-        if cls.lower() not in HORNET_CLASSES:
+        if r.get("Class", "").lower() not in HORNET_CLASSES:
             continue
-        conf   = float(r.get("Confidence", 0))
         cam_id = r.get("Camera", "cam1")
-        alerts.append({
-            "id":         f"{cam_id}_{r.get('Timestamp', '')}",
-            "timestamp":  r.get("Timestamp", ""),
-            "camera":     cam_id,
-            "cameraName": CAMERAS.get(cam_id, {}).get("name", cam_id),
-            "species":    cls,
-            "confidence": round(conf * 100, 1),
-            "severity":   "high" if conf > 0.75 else "medium" if conf > 0.5 else "low",
-            "imagePath":  r.get("Image_Path", ""),
-        })
+        alerts.append(_build_alert(r, cam_id))
+    # FIX: trả {alerts: [...], total: N} — AlertPanel parse đúng
     return jsonify({"alerts": alerts[:limit], "total": len(alerts)})
 
 
-# ── HISTORY ───────────────────────────────────────────────────────────────────
+def _build_history_item(r, cam_id, idx):
+    conf = 0.0
+    try:
+        conf = float(r.get("Confidence", 0))
+    except Exception:
+        pass
+    conf_pct = round(conf * 100, 1) if conf <= 1 else round(conf, 1)
+    img_name = r.get("Image_Path", "")
+    return {
+        "id":         f"{cam_id}_{r.get('Timestamp','')}_{idx}",
+        "timestamp":  r.get("Timestamp", ""),
+        "camera":     cam_id,
+        "cameraName": CAMERAS.get(cam_id, {}).get("name", cam_id),
+        "species":    r.get("Class", "unknown"),
+        "confidence": conf_pct,
+        "hasImage":   _find_image(img_name) is not None,
+        "imagePath":  img_name,
+        # Thêm các field RecentDetections cần
+        "location":   CAMERAS.get(cam_id, {}).get("position", cam_id),
+        "action":     "Alert Sent" if conf_pct >= 75 else "Logged",
+    }
+
+
 @app.route("/api/history")
 def api_history():
     rows  = _read_log()
     limit = int(request.args.get("limit", 30))
     cam   = request.args.get("camera")
     history = []
-    for r in reversed(rows):
+    for i, r in enumerate(reversed(rows)):
         if cam and r.get("Camera") != cam:
             continue
-        cam_id   = r.get("Camera", "cam1")
-        img_name = r.get("Image_Path", "")
-        history.append({
-            "timestamp":  r.get("Timestamp", ""),
-            "camera":     cam_id,
-            "cameraName": CAMERAS.get(cam_id, {}).get("name", cam_id),
-            "species":    r.get("Class", "unknown"),
-            "confidence": round(float(r.get("Confidence", 0)) * 100, 1),
-            "hasImage":   _find_image(img_name) is not None,
-            "imagePath":  img_name,
-        })
+        cam_id = r.get("Camera", "cam1")
+        history.append(_build_history_item(r, cam_id, i))
+    # FIX: trả {history: [...], total: N} — RecentDetections parse đúng
     return jsonify({"history": history[:limit], "total": len(history)})
+
+
+# ── FIX: alias /api/detections → cùng logic với /api/history ─────────────────
+# RecentDetections.tsx cũ gọi /api/detections — redirect về /api/history
+@app.route("/api/detections")
+def api_detections():
+    return api_history()
 
 
 @app.route("/api/history/image")
 def history_image():
     img_name = request.args.get("path", "")
     if not img_name:
-        return jsonify({"error": "No path param"}), 400
+        return jsonify({"error": "No path"}), 400
     img_full = _find_image(img_name)
     if img_full is None:
         return jsonify({"error": "Not found"}), 404
     return _no_cache(send_file(img_full, mimetype="image/jpeg"))
 
 
-# ── ANALYTICS ─────────────────────────────────────────────────────────────────
 @app.route("/api/analytics")
 def api_analytics():
     rows   = _read_log()
@@ -368,8 +401,8 @@ def api_analytics():
         if ts:
             try:
                 dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-                hourly[str(dt.hour).zfill(2)] = hourly.get(str(dt.hour).zfill(2), 0) + 1
-                weekly[str(dt.weekday())]      = weekly.get(str(dt.weekday()), 0) + 1
+                hourly[str(dt.hour).zfill(2)] += 1
+                weekly[str(dt.weekday())]      += 1
             except Exception:
                 pass
     return jsonify({
@@ -380,7 +413,6 @@ def api_analytics():
     })
 
 
-# ── IOT ───────────────────────────────────────────────────────────────────────
 @app.route("/api/iot/status")
 def iot_status():
     return jsonify(iot_state)
@@ -406,13 +438,12 @@ def iot_control():
 @app.route("/api/iot/reset", methods=["POST"])
 def iot_reset():
     ts = datetime.now().isoformat()
-    for dev, safe in [("door", "open"), ("buzzer", "off"), ("light", "off"), ("fan", "off")]:
+    for dev, safe in [("door","open"),("buzzer","off"),("light","off"),("fan","off")]:
         iot_state[dev]["status"]       = safe
         iot_state[dev]["last_changed"] = ts
     return jsonify({"success": True, "state": iot_state})
 
 
-# ── DETECTION CONTROL ─────────────────────────────────────────────────────────
 @app.route("/api/detection/start", methods=["POST"])
 def start_detection():
     data    = request.json or {}
@@ -436,7 +467,6 @@ def stop_detection():
     return jsonify({"success": True, "stopped": targets})
 
 
-# ── HEALTH ────────────────────────────────────────────────────────────────────
 @app.route("/api/health")
 def health():
     return jsonify({
@@ -453,13 +483,14 @@ def health():
     })
 
 
-# ─── MAIN ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("=" * 60)
-    print("HornetGuard Pro — API Server (FIXED)")
+    print("HornetGuard Pro — API Server (FINAL)")
     print(f"  SAVE_DIR : {SAVE_DIR}")
     print(f"  LOG_FILE : {LOG_FILE}  exists={os.path.exists(LOG_FILE)}")
     print(f"  Model    : {MODEL_PATH}  exists={os.path.exists(MODEL_PATH)}")
     print(f"  Classes  : {HORNET_CLASSES}")
+    print("  Endpoints: /api/alerts  /api/history  /api/detections  /api/stats")
+    print("             /api/analytics  /api/iot/*  /latest_frame/<cam_id>")
     print("=" * 60)
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
